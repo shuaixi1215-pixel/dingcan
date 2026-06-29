@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>云味小馆 - 商家后台</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="admin-body">
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="返回前台">
+        <span class="brand-mark">云</span>
+        <span>
+          <strong>云味小馆</strong>
+          <small>商家后台</small>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="index.html">前台点餐</a>
+        <a href="#admin-orders">订单管理</a>
+        <a href="#admin-dishes">菜品管理</a>
+      </nav>
+      <button class="cart-chip" type="button" data-admin-logout hidden>退出</button>
+    </header>
+
+    <main class="admin-shell">
+      <section class="admin-login" data-login-panel>
+        <div>
+          <p class="eyebrow">Admin</p>
+          <h1>商家后台登录</h1>
+          <p class="empty">演示版后台密码为 <strong>888888</strong>。正式版可升级为真实账号和数据库。</p>
+        </div>
+        <form class="checkout-form" data-login-form>
+          <label>
+            后台密码
+            <input name="password" type="password" placeholder="请输入后台密码" required>
+          </label>
+          <button class="submit-button" type="submit">进入后台</button>
+          <p class="form-tip" data-login-tip></p>
+        </form>
+      </section>
+
+      <section class="admin-dashboard" data-admin-dashboard hidden>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Dashboard</p>
+            <h1>今日经营概览</h1>
+          </div>
+          <button class="ghost-button" type="button" data-reset-demo>重置演示数据</button>
+        </div>
+
+        <section class="summary-band admin-stats" aria-label="经营数据">
+          <div>
+            <strong data-stat-orders>0</strong>
+            <span>订单数</span>
+          </div>
+          <div>
+            <strong data-stat-revenue>¥0</strong>
+            <span>订单金额</span>
+          </div>
+          <div>
+            <strong data-stat-pending>0</strong>
+            <span>待处理</span>
+          </div>
+          <div>
+            <strong data-stat-dishes>0</strong>
+            <span>上架菜品</span>
+          </div>
+        </section>
+
+        <section class="admin-section" id="admin-orders">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Orders</p>
+              <h2>订单管理</h2>
+            </div>
+          </div>
+          <div class="admin-list" data-admin-orders></div>
+        </section>
+
+        <section class="admin-section" id="admin-dishes">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Menu</p>
+              <h2>菜品管理</h2>
+            </div>
+          </div>
+          <div class="admin-list" data-admin-dishes></div>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" role="status" aria-live="polite" data-toast></div>
+    <script src="admin.js"></script>
+  </body>
+</html>

@@ -538,6 +538,125 @@ h2 {
   opacity: 1;
 }
 
+.admin-body {
+  background: #f7f8f5;
+}
+
+.admin-shell {
+  width: min(1220px, calc(100% - 32px));
+  margin: 42px auto 80px;
+}
+
+.admin-login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 28px;
+  align-items: start;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.admin-login h1,
+.admin-dashboard h1 {
+  margin: 0 0 10px;
+  font-size: clamp(30px, 4vw, 48px);
+}
+
+.admin-dashboard .summary-band {
+  margin: 0 0 28px;
+  width: 100%;
+}
+
+.admin-section {
+  margin-top: 34px;
+}
+
+.admin-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.admin-card p {
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+
+.admin-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pill {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: var(--green);
+  background: #e8f4ed;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.admin-actions select {
+  min-width: 118px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dish-mini {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.dish-mini .dish-photo {
+  width: 58px;
+  min-height: 58px;
+  flex: 0 0 58px;
+  font-size: 24px;
+}
+
+.switch {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--green);
+}
+
 .mobile-cart {
   position: fixed;
   z-index: 30;
@@ -576,6 +695,15 @@ h2 {
 
   .mobile-cart {
     display: block;
+  }
+
+  .admin-login,
+  .admin-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-actions {
+    justify-items: start;
   }
 }
 
