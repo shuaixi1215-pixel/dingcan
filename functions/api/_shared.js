@@ -12,6 +12,8 @@ export const defaultDishes = [
 export const orderStatuses = ["待接单", "已接单", "制作中", "配送中", "已完成", "已取消"];
 export const minimumOrder = 20;
 export const deliveryFee = 4;
+export const sessionCookieName = "dingcan_admin_session";
+export const sessionDays = 7;
 
 export function json(data, init = {}) {
   return Response.json(data, {
@@ -26,6 +28,10 @@ export function json(data, init = {}) {
 
 export function badRequest(message) {
   return json({ error: message }, { status: 400 });
+}
+
+export function unauthorized(message = "请先登录后台。") {
+  return json({ error: message }, { status: 401 });
 }
 
 export function getDb(context) {
@@ -133,4 +139,158 @@ export async function listOrders(db) {
 
 export function cleanText(value, maxLength) {
   return String(value || "").trim().slice(0, maxLength);
+}
+
+export async function ensureAuthTables(db) {
+  await db.batch([
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        iterations INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS admin_sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+      )
+    `),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_sessions_token_hash ON admin_sessions(token_hash)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at)")
+  ]);
+}
+
+export async function hasAdminUser(db) {
+  await ensureAuthTables(db);
+  const row = await db.prepare("SELECT COUNT(*) AS count FROM admin_users").first();
+  return Number(row?.count || 0) > 0;
+}
+
+export function parseCookies(request) {
+  const header = request.headers.get("Cookie") || "";
+  const cookies = new Map();
+  for (const part of header.split(";")) {
+    const [name, ...valueParts] = part.trim().split("=");
+    if (name) {
+      cookies.set(name, valueParts.join("="));
+    }
+  }
+  return cookies;
+}
+
+export function base64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+export function randomToken(byteLength = 32) {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return base64Url(bytes);
+}
+
+export async function sha256(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return base64Url(new Uint8Array(digest));
+}
+
+export function constantTimeEqual(a, b) {
+  const left = new TextEncoder().encode(String(a));
+  const right = new TextEncoder().encode(String(b));
+  let diff = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+
+  for (let index = 0; index < length; index += 1) {
+    diff |= (left[index] || 0) ^ (right[index] || 0);
+  }
+
+  return diff === 0;
+}
+
+export async function hashPassword(password, salt = randomToken(16), iterations = 120000) {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: new TextEncoder().encode(salt),
+      iterations
+    },
+    keyMaterial,
+    256
+  );
+  return {
+    hash: base64Url(new Uint8Array(bits)),
+    salt,
+    iterations
+  };
+}
+
+export async function createSession(db, userId) {
+  const token = randomToken(32);
+  const tokenHash = await sha256(token);
+  const expiresAt = new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000).toISOString();
+  const id = crypto.randomUUID();
+
+  await db.prepare(`
+    INSERT INTO admin_sessions (id, user_id, token_hash, expires_at)
+    VALUES (?, ?, ?, ?)
+  `).bind(id, userId, tokenHash, expiresAt).run();
+
+  return { token, expiresAt };
+}
+
+export function sessionCookie(token, expiresAt) {
+  return `${sessionCookieName}=${token}; Path=/; Expires=${new Date(expiresAt).toUTCString()}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+export function clearSessionCookie() {
+  return `${sessionCookieName}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
+}
+
+export async function getAdminUser(context) {
+  const db = getDb(context);
+  if (!db) return null;
+
+  await ensureAuthTables(db);
+  const token = parseCookies(context.request).get(sessionCookieName);
+  if (!token) return null;
+
+  const tokenHash = await sha256(token);
+  const now = new Date().toISOString();
+  const session = await db.prepare(`
+    SELECT admin_sessions.id, admin_users.id AS user_id, admin_users.username
+    FROM admin_sessions
+    JOIN admin_users ON admin_users.id = admin_sessions.user_id
+    WHERE admin_sessions.token_hash = ? AND admin_sessions.expires_at > ?
+  `).bind(tokenHash, now).first();
+
+  if (!session) return null;
+  return { id: session.user_id, username: session.username, sessionId: session.id };
+}
+
+export async function requireAdmin(context) {
+  const user = await getAdminUser(context);
+  if (!user) {
+    return { response: unauthorized() };
+  }
+  return { user };
 }

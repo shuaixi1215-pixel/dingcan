@@ -1,10 +1,13 @@
-import { badRequest, getDb, json, orderStatuses, readBody } from "../../_shared.js";
+import { badRequest, getDb, json, orderStatuses, readBody, requireAdmin } from "../../_shared.js";
 
 export async function onRequestPut(context) {
   const db = getDb(context);
   if (!db) {
     return json({ error: "D1 database binding DB is not configured." }, { status: 503 });
   }
+
+  const auth = await requireAdmin(context);
+  if (auth.response) return auth.response;
 
   const body = await readBody(context.request);
   if (!body || !orderStatuses.includes(body.status)) {

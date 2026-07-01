@@ -27,15 +27,19 @@
       <section class="admin-login" data-login-panel>
         <div>
           <p class="eyebrow">Admin</p>
-          <h1>商家后台登录</h1>
-          <p class="empty">演示版后台密码为 <strong>888888</strong>。正式版可升级为真实账号和数据库。</p>
+          <h1 data-login-title>商家后台登录</h1>
+          <p class="empty" data-login-copy>请输入管理员账号和密码。首次上线时，需要先创建管理员账号。</p>
         </div>
         <form class="checkout-form" data-login-form>
           <label>
-            后台密码
-            <input name="password" type="password" placeholder="请输入后台密码" required>
+            用户名
+            <input name="username" autocomplete="username" placeholder="例如：admin" required>
           </label>
-          <button class="submit-button" type="submit">进入后台</button>
+          <label>
+            密码
+            <input name="password" type="password" autocomplete="current-password" placeholder="至少 8 位" required>
+          </label>
+          <button class="submit-button" type="submit" data-login-button>进入后台</button>
           <p class="form-tip" data-login-tip></p>
         </form>
       </section>

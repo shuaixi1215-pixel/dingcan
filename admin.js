@@ -11,8 +11,7 @@ const defaultDishes = [
 
 const storage = {
   dishes: "dingcan_dishes",
-  orders: "dingcan_orders",
-  session: "dingcan_admin_session"
+  orders: "dingcan_orders"
 };
 
 const api = {
@@ -23,12 +22,13 @@ const api = {
         headers: { "Content-Type": "application/json", ...(options.headers || {}) },
         ...options
       });
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(`API ${response.status}`);
+        return { ...data, ok: false, status: response.status };
       }
 
-      return await response.json();
+      return data;
     } catch (error) {
       api.available = false;
       console.warn("API unavailable, using local demo data.", error);
@@ -38,12 +38,14 @@ const api = {
 };
 
 const orderStatuses = ["待接单", "已接单", "制作中", "配送中", "已完成", "已取消"];
-const adminPassword = "888888";
 
 const $ = (selector) => document.querySelector(selector);
 const loginPanel = $("[data-login-panel]");
 const dashboard = $("[data-admin-dashboard]");
 const loginForm = $("[data-login-form]");
+const loginTitle = $("[data-login-title]");
+const loginCopy = $("[data-login-copy]");
+const loginButton = $("[data-login-button]");
 const loginTip = $("[data-login-tip]");
 const logoutButton = $("[data-admin-logout]");
 const ordersEl = $("[data-admin-orders]");
@@ -52,6 +54,7 @@ const toastEl = $("[data-toast]");
 
 let dishes = readJson(storage.dishes, defaultDishes);
 let orders = readJson(storage.orders, []);
+let needsSetup = false;
 
 function readJson(key, fallback) {
   try {
@@ -79,7 +82,6 @@ function showToast(message) {
 }
 
 function setLoggedIn(isLoggedIn) {
-  localStorage.setItem(storage.session, isLoggedIn ? "1" : "0");
   loginPanel.hidden = isLoggedIn;
   dashboard.hidden = !isLoggedIn;
   logoutButton.hidden = !isLoggedIn;
@@ -87,6 +89,14 @@ function setLoggedIn(isLoggedIn) {
     renderAdmin();
     syncFromApi();
   }
+}
+
+function renderLoginMode() {
+  loginTitle.textContent = needsSetup ? "创建管理员账号" : "商家后台登录";
+  loginCopy.textContent = needsSetup
+    ? "这是第一次启用后台。请设置一个只有商家知道的管理员账号和密码。"
+    : "请输入管理员账号和密码。";
+  loginButton.textContent = needsSetup ? "创建并进入后台" : "进入后台";
 }
 
 function renderStats() {
@@ -186,20 +196,49 @@ async function syncFromApi() {
   }
 }
 
-loginForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const password = new FormData(loginForm).get("password");
-  if (password !== adminPassword) {
-    loginTip.textContent = "密码不正确。演示密码是 888888。";
+async function checkAuth() {
+  const data = await api.request("/api/auth/status");
+  if (!data) {
+    loginTip.textContent = "暂时无法连接后台服务，请稍后刷新。";
+    renderLoginMode();
     return;
   }
+
+  needsSetup = Boolean(data.needsSetup);
+  renderLoginMode();
+  setLoggedIn(Boolean(data.authenticated));
+}
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(loginForm);
+  const payload = {
+    username: formData.get("username").trim(),
+    password: formData.get("password")
+  };
+
+  const endpoint = needsSetup ? "/api/auth/setup" : "/api/auth/login";
+  const data = await api.request(endpoint, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+
+  if (!data?.ok) {
+    loginTip.textContent = data?.error || "登录失败，请检查账号和密码。";
+    return;
+  }
+
+  const wasSetup = needsSetup;
+  needsSetup = false;
   loginForm.reset();
   loginTip.textContent = "";
+  renderLoginMode();
   setLoggedIn(true);
-  showToast("已进入商家后台");
+  showToast(wasSetup ? "管理员账号已创建" : "已进入商家后台");
 });
 
-logoutButton.addEventListener("click", () => {
+logoutButton.addEventListener("click", async () => {
+  await api.request("/api/auth/logout", { method: "POST" });
   setLoggedIn(false);
   showToast("已退出后台");
 });
@@ -215,14 +254,15 @@ document.addEventListener("change", async (event) => {
       body: JSON.stringify({ status: statusSelect.value })
     });
 
-    orders = orders.map((order) => order.id === id ? { ...order, status: statusSelect.value } : order);
-    writeJson(storage.orders, orders);
     if (data?.ok) {
+      orders = orders.map((order) => order.id === id ? { ...order, status: statusSelect.value } : order);
+      writeJson(storage.orders, orders);
       await syncFromApi();
+      showToast("云端订单状态已更新");
     } else {
       renderAdmin();
+      showToast(data?.error || "更新失败，请重新登录后台。");
     }
-    showToast(data?.ok ? "云端订单状态已更新" : "订单状态已在本地更新");
   }
 
   if (dishToggle) {
@@ -232,14 +272,15 @@ document.addEventListener("change", async (event) => {
       body: JSON.stringify({ available: dishToggle.checked })
     });
 
-    dishes = dishes.map((dish) => dish.id === id ? { ...dish, available: dishToggle.checked } : dish);
-    writeJson(storage.dishes, dishes);
     if (data?.ok) {
+      dishes = dishes.map((dish) => dish.id === id ? { ...dish, available: dishToggle.checked } : dish);
+      writeJson(storage.dishes, dishes);
       await syncFromApi();
+      showToast("云端菜品状态已更新");
     } else {
       renderAdmin();
+      showToast(data?.error || "更新失败，请重新登录后台。");
     }
-    showToast(data?.ok ? "云端菜品状态已更新" : "菜品状态已在本地更新");
   }
 });
 
@@ -250,4 +291,4 @@ $("[data-reset-demo]").addEventListener("click", () => {
   showToast("菜品已恢复默认状态");
 });
 
-setLoggedIn(localStorage.getItem(storage.session) === "1");
+checkAuth();

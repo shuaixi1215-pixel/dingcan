@@ -233,19 +233,11 @@ function showToast(message) {
 }
 
 async function syncFromApi() {
-  const [dishesData, ordersData] = await Promise.all([
-    api.request("/api/dishes"),
-    api.request("/api/orders")
-  ]);
+  const dishesData = await api.request("/api/dishes");
 
   if (dishesData?.dishes?.length) {
     state.dishes = dishesData.dishes;
     saveDishes();
-  }
-
-  if (ordersData?.orders) {
-    state.orders = ordersData.orders;
-    writeJson(storage.orders, state.orders);
   }
 
   renderTabs();
