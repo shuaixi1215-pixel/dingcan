@@ -32,19 +32,28 @@ export async function onRequestPost(context) {
     return badRequest("密码至少需要 8 位。");
   }
 
-  const passwordResult = await hashPassword(password);
-  const userId = crypto.randomUUID();
+  let passwordResult;
+  try {
+    passwordResult = await hashPassword(password);
+  } catch {
+    return json({ error: "密码加密失败，请稍后重试。" }, { status: 500 });
+  }
 
-  await db.prepare(`
-    INSERT INTO admin_users (id, username, password_hash, password_salt, iterations)
-    VALUES (?, ?, ?, ?, ?)
-  `).bind(
-    userId,
-    username,
-    passwordResult.hash,
-    passwordResult.salt,
-    passwordResult.iterations
-  ).run();
+  const userId = crypto.randomUUID();
+  try {
+    await db.prepare(`
+      INSERT INTO admin_users (id, username, password_hash, password_salt, iterations)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(
+      userId,
+      username,
+      passwordResult.hash,
+      passwordResult.salt,
+      passwordResult.iterations
+    ).run();
+  } catch {
+    return json({ error: "管理员账号保存失败，请稍后重试。" }, { status: 500 });
+  }
 
   const session = await createSession(db, userId);
 

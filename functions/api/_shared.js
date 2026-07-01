@@ -219,7 +219,7 @@ export function constantTimeEqual(a, b) {
   return diff === 0;
 }
 
-export async function hashPassword(password, salt = randomToken(16), iterations = 120000) {
+export async function hashPassword(password, salt = randomToken(16), iterations = 30000) {
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(password),

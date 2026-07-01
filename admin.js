@@ -224,7 +224,7 @@ loginForm.addEventListener("submit", async (event) => {
   });
 
   if (!data?.ok) {
-    loginTip.textContent = data?.error || "登录失败，请检查账号和密码。";
+    loginTip.textContent = data?.error || `后台服务返回 ${data?.status || "未知"}，请稍后重试。`;
     return;
   }
 
