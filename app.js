@@ -15,6 +15,28 @@ const storage = {
   orders: "dingcan_orders"
 };
 
+const api = {
+  available: true,
+  async request(path, options = {}) {
+    try {
+      const response = await fetch(path, {
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options
+      });
+
+      if (!response.ok) {
+        throw new Error(`API ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      api.available = false;
+      console.warn("API unavailable, using local demo data.", error);
+      return null;
+    }
+  }
+};
+
 function readJson(key, fallback) {
   try {
     return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
@@ -70,6 +92,10 @@ function money(value) {
 function save() {
   writeJson(storage.cart, state.cart);
   writeJson(storage.orders, state.orders);
+}
+
+function saveDishes() {
+  writeJson(storage.dishes, state.dishes);
 }
 
 function getVisibleDishes() {
@@ -206,6 +232,32 @@ function showToast(message) {
   }, 2200);
 }
 
+async function syncFromApi() {
+  const [dishesData, ordersData] = await Promise.all([
+    api.request("/api/dishes"),
+    api.request("/api/orders")
+  ]);
+
+  if (dishesData?.dishes?.length) {
+    state.dishes = dishesData.dishes;
+    saveDishes();
+  }
+
+  if (ordersData?.orders) {
+    state.orders = ordersData.orders;
+    writeJson(storage.orders, state.orders);
+  }
+
+  renderTabs();
+  renderMenu();
+  renderCart();
+  renderOrders();
+
+  if (api.available) {
+    showToast("已连接云端订单系统");
+  }
+}
+
 function changeQty(id, delta) {
   const dish = state.dishes.find((item) => item.id === id);
   if (!dish || dish.available === false) {
@@ -260,7 +312,7 @@ $("[data-clear-orders]").addEventListener("click", () => {
   showToast("订单记录已清除");
 });
 
-orderForm.addEventListener("submit", (event) => {
+orderForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const totals = getTotals();
   if (totals.subtotal < minimumOrder) {
@@ -269,19 +321,37 @@ orderForm.addEventListener("submit", (event) => {
   }
 
   const formData = new FormData(orderForm);
-  const order = {
-    id: `DC${Date.now().toString().slice(-8)}`,
-    createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-    items: totals.lines.map(({ id, name, qty, price }) => ({ id, name, qty, price })),
-    subtotal: totals.subtotal,
-    fee: totals.fee,
-    total: totals.total,
-    status: orderStatuses[0],
+  const orderPayload = {
+    items: totals.lines.map(({ id, qty }) => ({ id, qty })),
     name: formData.get("name").trim(),
     phone: formData.get("phone").trim(),
     address: formData.get("address").trim(),
     note: formData.get("note").trim()
   };
+
+  let order = null;
+  const data = await api.request("/api/orders", {
+    method: "POST",
+    body: JSON.stringify(orderPayload)
+  });
+
+  if (data?.order) {
+    order = data.order;
+  } else {
+    order = {
+      id: `DC${Date.now().toString().slice(-8)}`,
+      createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+      items: totals.lines.map(({ id, name, qty, price }) => ({ id, name, qty, price })),
+      subtotal: totals.subtotal,
+      fee: totals.fee,
+      total: totals.total,
+      status: orderStatuses[0],
+      name: formData.get("name").trim(),
+      phone: formData.get("phone").trim(),
+      address: formData.get("address").trim(),
+      note: formData.get("note").trim()
+    };
+  }
 
   state.orders = [order, ...state.orders].slice(0, 20);
   state.cart = {};
@@ -297,3 +367,4 @@ renderTabs();
 renderMenu();
 renderCart();
 renderOrders();
+syncFromApi();

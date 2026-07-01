@@ -15,6 +15,28 @@ const storage = {
   session: "dingcan_admin_session"
 };
 
+const api = {
+  available: true,
+  async request(path, options = {}) {
+    try {
+      const response = await fetch(path, {
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options
+      });
+
+      if (!response.ok) {
+        throw new Error(`API ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      api.available = false;
+      console.warn("API unavailable, using local demo data.", error);
+      return null;
+    }
+  }
+};
+
 const orderStatuses = ["待接单", "已接单", "制作中", "配送中", "已完成", "已取消"];
 const adminPassword = "888888";
 
@@ -63,6 +85,7 @@ function setLoggedIn(isLoggedIn) {
   logoutButton.hidden = !isLoggedIn;
   if (isLoggedIn) {
     renderAdmin();
+    syncFromApi();
   }
 }
 
@@ -138,6 +161,31 @@ function renderAdmin() {
   renderDishes();
 }
 
+async function syncFromApi() {
+  const [dishesData, ordersData] = await Promise.all([
+    api.request("/api/dishes"),
+    api.request("/api/orders")
+  ]);
+
+  if (dishesData?.dishes?.length) {
+    dishes = dishesData.dishes;
+    writeJson(storage.dishes, dishes);
+  }
+
+  if (ordersData?.orders) {
+    orders = ordersData.orders;
+    writeJson(storage.orders, orders);
+  }
+
+  renderStats();
+  renderOrders();
+  renderDishes();
+
+  if (api.available) {
+    showToast("已连接云端订单系统");
+  }
+}
+
 loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const password = new FormData(loginForm).get("password");
@@ -156,24 +204,42 @@ logoutButton.addEventListener("click", () => {
   showToast("已退出后台");
 });
 
-document.addEventListener("change", (event) => {
+document.addEventListener("change", async (event) => {
   const statusSelect = event.target.closest("[data-order-status]");
   const dishToggle = event.target.closest("[data-dish-toggle]");
 
   if (statusSelect) {
     const id = statusSelect.dataset.orderStatus;
+    const data = await api.request(`/api/orders/${encodeURIComponent(id)}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status: statusSelect.value })
+    });
+
     orders = orders.map((order) => order.id === id ? { ...order, status: statusSelect.value } : order);
     writeJson(storage.orders, orders);
-    renderAdmin();
-    showToast("订单状态已更新");
+    if (data?.ok) {
+      await syncFromApi();
+    } else {
+      renderAdmin();
+    }
+    showToast(data?.ok ? "云端订单状态已更新" : "订单状态已在本地更新");
   }
 
   if (dishToggle) {
     const id = dishToggle.dataset.dishToggle;
+    const data = await api.request(`/api/dishes/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ available: dishToggle.checked })
+    });
+
     dishes = dishes.map((dish) => dish.id === id ? { ...dish, available: dishToggle.checked } : dish);
     writeJson(storage.dishes, dishes);
-    renderAdmin();
-    showToast("菜品状态已更新");
+    if (data?.ok) {
+      await syncFromApi();
+    } else {
+      renderAdmin();
+    }
+    showToast(data?.ok ? "云端菜品状态已更新" : "菜品状态已在本地更新");
   }
 });
 
